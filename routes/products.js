@@ -1,75 +1,58 @@
 const router = require("express").Router();
 const Product = require("../model/Product");
+const mongoose = require("mongoose");
 
 router.get("/", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const category = req.query.category;
 
-    const snapshotTime =
-      req.query.snapshotTime || new Date().toISOString();
-
-    let query = {
-      updated_at: {
-        $lte: new Date(snapshotTime),
-      },
-    };
+    let query = {};
 
     if (category) {
       query.category = category;
     }
 
+    // SAFE CURSOR PAGINATION
     if (req.query.cursorUpdatedAt && req.query.cursorId) {
-      query.$and = [
+      query.$or = [
         {
-          $or: [
-            {
-              updated_at: {
-                $lt: new Date(req.query.cursorUpdatedAt),
-              },
-            },
-            {
-              updated_at: new Date(req.query.cursorUpdatedAt),
-              _id: {
-                $lt: req.query.cursorId,
-              },
-            },
-          ],
+          updated_at: { $lt: new Date(req.query.cursorUpdatedAt) },
+        },
+        {
+          updated_at: new Date(req.query.cursorUpdatedAt),
+          _id: { $lt: new mongoose.Types.ObjectId(req.query.cursorId) },
         },
       ];
     }
 
     const products = await Product.find(query)
-      .sort({
-        updated_at: -1,
-        _id: -1,
-      })
+      .sort({ updated_at: -1, _id: -1 })
       .limit(limit);
 
     let nextCursor = null;
 
     if (products.length > 0) {
-      const lastProduct = products[products.length - 1];
+      const last = products[products.length - 1];
 
       nextCursor = {
-        updated_at: lastProduct.updated_at,
-        id: lastProduct._id,
+        cursorUpdatedAt: last.updated_at,
+        cursorId: last._id,
       };
     }
 
-    res.status(200).json({
+    res.json({
       success: true,
-      snapshotTime,
       count: products.length,
       nextCursor,
       products,
     });
-  } catch (error) {
-    console.log(error);
+  } catch (err) {
+    console.log("ERROR:", err);
 
     res.status(500).json({
       success: false,
-      message: "Server Error",
+      message: err.message,
     });
   }
 });

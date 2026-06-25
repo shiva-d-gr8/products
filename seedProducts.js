@@ -45,7 +45,7 @@ async function seedProducts() {
     // Remove old products
     await Product.deleteMany({});
 
-    const totalProducts = 200000;
+    const totalProducts = 20000;
     const batchSize = 5000;
 
     for (let i = 0; i < totalProducts; i += batchSize) {
